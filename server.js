@@ -1,13 +1,24 @@
-// server.js
+require('dotenv').config();
 const Hapi = require('@hapi/hapi');
+const mongoose = require('mongoose');
 const Path = require('path');
-const pool = require('./db');
-const Inert = require('@hapi/inert');
-const Vision = require('@hapi/vision');
 
+// Koneksi ke MongoDB Atlas
 const init = async () => {
+  await mongoose.connect(process.env.MONGO_URI);
+  console.log("✅ MongoDB Connected");
+
+  // Buat Schema dan Model
+  const UserSchema = new mongoose.Schema({
+    username: String,
+    password: String,
+  });
+  const User = mongoose.model('User', UserSchema);
+
+  // Setup Server Hapi
   const server = Hapi.server({
-    port: 3000,
+    port: process.env.PORT || 3000,
+    host: 'localhost',
     routes: {
       files: {
         relativeTo: Path.join(__dirname, 'public')
@@ -15,66 +26,80 @@ const init = async () => {
     }
   });
 
-  await server.register([Inert, Vision]);
+  // Plugin untuk file statis (HTML, CSS)
+  await server.register(require('@hapi/inert'));
 
+  // Serve file HTML utama
+  server.route({
+    method: 'GET',
+    path: '/',
+    handler: (request, h) => {
+      return h.file('register.html'); // default halaman awal
+    }
+  });
 
-  // Route for static files (HTML)
+  // Serve file HTML statis
   server.route({
     method: 'GET',
     path: '/{param*}',
     handler: {
       directory: {
         path: '.',
-        index: ['login.html']
+        index: false,
       }
     }
   });
 
-  // Register
+  // Route register user
   server.route({
     method: 'POST',
     path: '/register',
+    options: {
+      payload: {
+        parse: true,
+        multipart: true,
+        output: 'data'
+      }
+    },
     handler: async (request, h) => {
       const { username, password } = request.payload;
-
-      try {
-        const [rows] = await pool.query('SELECT * FROM users WHERE username = ?', [username]);
-        if (rows.length > 0) {
-          return 'Username already taken.';
-        }
-
-        await pool.query('INSERT INTO users (username, password) VALUES (?, ?)', [username, password]);
-        return 'Registration successful. <a href="/login.html">Login here</a>';
-      } catch (err) {
-        console.error(err);
-        return h.response('Server error').code(500);
-      }
+      await User.create({ username, password });
+      return '✅ Registrasi berhasil!';
     }
   });
 
-  // Login
+  // Route login user
   server.route({
     method: 'POST',
     path: '/login',
+    options: {
+      payload: {
+        parse: true,
+        multipart: true,
+        output: 'data'
+      }
+    },
     handler: async (request, h) => {
       const { username, password } = request.payload;
+      const user = await User.findOne({ username, password });
 
-      try {
-        const [rows] = await pool.query('SELECT * FROM users WHERE username = ? AND password = ?', [username, password]);
-        if (rows.length > 0) {
-          return `Welcome, ${username}!`;
-        } else {
-          return 'Invalid username or password. <a href="/login.html">Try again</a>';
-        }
-      } catch (err) {
-        console.error(err);
-        return h.response('Server error').code(500);
+      if (user) {
+        return `👋 Selamat datang, ${user.username}!`;
+      } else {
+        return '❌ Login gagal. Username atau password salah.';
       }
     }
   });
 
+  // Jalankan server
   await server.start();
-  console.log('Server running on %s', server.info.uri);
+  console.log('🚀 Server running at:', server.info.uri);
 };
+
+// Tangani error
+process.on('unhandledRejection', err => {
+  console.log(err);
+  process.exit(1);
+});
 
 init();
