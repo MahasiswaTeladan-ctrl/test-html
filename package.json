@@ -1,0 +1,19 @@
+{
+  "name": "teshtml",
+  "version": "1.0.0",
+  "main": "db.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@hapi/hapi": "^21.4.0",
+    "@hapi/inert": "^7.1.0",
+    "@hapi/vision": "^7.0.3",
+    "mysql2": "^3.14.1"
+  }
+}
